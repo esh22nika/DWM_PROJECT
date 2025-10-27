@@ -106,14 +106,14 @@ export function About() {
         {/* Features Grid */}
         <div className="mb-16">
           <motion.h2
-            className="text-center mb-8"
+            className="text-center mb-8 text-slate-900"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            className="text-slate-900"
           >
             Key Features
           </motion.h2>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, index) => (
               <motion.div
@@ -141,14 +141,14 @@ export function About() {
         {/* Technologies */}
         <div className="mb-16">
           <motion.h2
-            className="text-center mb-8"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="text-slate-900"
-          >
-            Technologies Used
-          </motion.h2>
+          className="text-center mb-8 text-slate-900"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          Data Sources
+        </motion.h2>
+
           <Card className="bg-white border-slate-200 p-8 shadow-md">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {technologies.map((tech, index) => (
@@ -171,14 +171,14 @@ export function About() {
         {/* Data Sources */}
         <div className="mb-16">
           <motion.h2
-            className="text-center mb-8"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="text-slate-900"
-          >
-            Data Sources
-          </motion.h2>
+          className="text-center mb-8 text-slate-900"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+        >
+          Technologies Used
+        </motion.h2>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {platforms.map((platform, index) => (
               <motion.div
