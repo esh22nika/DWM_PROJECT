@@ -1,0 +1,720 @@
+import { motion } from "framer-motion";
+import { Card } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
+import {
+  Network,
+  GitBranch,
+  TrendingUp,
+  ArrowRight,
+  Users,
+  Clock,
+  BarChart3,
+  Globe,
+} from "lucide-react";
+import { Progress } from "../components/ui/progress";
+import { useState, useEffect } from "react";
+import Papa from "papaparse";
+
+interface Post {
+  post_id: string;
+  platform: string;
+  user: string;
+  content: string;
+  hashtags: string;
+  topic: string;
+  likes: number;
+  shares: number;
+  comments: number;
+  sentiment: string;
+  timestamp: string;
+  region: string;
+}
+
+interface AssociationRule {
+  rule: string;
+  antecedent: string[];
+  consequent: string[];
+  trend_strength: number;
+  popularity_score: number;
+  occurrence_count: number;
+  growth_rate: number;
+  engagement_impact: number;
+  platforms: string[];
+  trend_direction: string;
+  examples: {
+    post_id: string;
+    content: string;
+    engagement_score: number;
+  }[];
+}
+
+interface FrequentItemset {
+  items: string[];
+  trend_strength: number;
+  popularity_score: number;
+  occurrence_count: number;
+  growth_rate: number;
+  trend_direction: string;
+}
+
+interface SequentialPattern {
+  sequence: string[];
+  pattern_strength: number;
+  occurrence_count: number;
+  avg_duration: string;
+  temporal_clustering: number;
+  user_diversity: number;
+  trend_category: string;
+}
+
+interface TrendMetric {
+  topic: string;
+  momentum: number;
+  category: string;
+  confidence: number;
+  total_posts: number;
+  avg_engagement: number;
+}
+
+interface CrossPlatformPattern {
+  topic: string;
+  leading_platform: string;
+  platform_count: number;
+  dominance_percentage: number;
+  pattern_type: string;
+  total_posts: number;
+  platform_breakdown: Record<string, number>;
+}
+
+export function PatternMining() {
+  const [selectedRule, setSelectedRule] = useState<number | null>(null);
+  const [data, setData] = useState<Post[]>([]);
+  const [associationRules, setAssociationRules] = useState<AssociationRule[]>([]);
+  const [frequentItemsets, setFrequentItemsets] = useState<FrequentItemset[]>([]);
+  const [sequentialPatterns, setSequentialPatterns] = useState<SequentialPattern[]>([]);
+  const [emergingTrends, setEmergingTrends] = useState<TrendMetric[]>([]);
+  const [decliningTrends, setDecliningTrends] = useState<TrendMetric[]>([]);
+  const [stableTrends, setStableTrends] = useState<TrendMetric[]>([]);
+  const [crossPlatformPatterns, setCrossPlatformPatterns] = useState<CrossPlatformPattern[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalRules: 0,
+    totalItemsets: 0,
+    totalSequences: 0,
+  });
+
+  // Helper function to extract hashtags
+  const extractHashtags = (hashtagStr: string): string[] => {
+    if (!hashtagStr) return [];
+    return hashtagStr
+      .split(",")
+      .map((h) => h.trim().replace("#", ""))
+      .filter((h) => h.length > 0);
+  };
+
+  // Helper function to extract keywords from content
+  const extractKeywords = (content: string): string[] => {
+    if (!content) return [];
+    const words = content.match(/\b[A-Z][a-z]+\b/g) || [];
+    return words.slice(0, 3);
+  };
+
+  // Calculate engagement score
+  const calculateEngagement = (post: Post): number => {
+    return post.likes + post.shares * 2 + post.comments * 3;
+  };
+
+  // Mine association rules
+  const mineAssociationRules = (posts: Post[]): AssociationRule[] => {
+    const itemPairs = new Map<string, {
+      count: number;
+      posts: Post[];
+      items: [string, string];
+    }>();
+
+    // Extract items and find pairs
+    posts.forEach((post) => {
+      const items = new Set<string>();
+      items.add(post.topic);
+      extractHashtags(post.hashtags).forEach((h) => items.add(h));
+      extractKeywords(post.content).forEach((k) => items.add(k));
+
+      const itemArray = Array.from(items);
+      for (let i = 0; i < itemArray.length; i++) {
+        for (let j = i + 1; j < itemArray.length; j++) {
+          const pair = [itemArray[i], itemArray[j]].sort().join("|");
+          if (!itemPairs.has(pair)) {
+            itemPairs.set(pair, {
+              count: 0,
+              posts: [],
+              items: [itemArray[i], itemArray[j]],
+            });
+          }
+          const pairData = itemPairs.get(pair)!;
+          pairData.count++;
+          if (pairData.posts.length < 3) {
+            pairData.posts.push(post);
+          }
+        }
+      }
+    });
+
+    // Convert to rules
+    const rules: AssociationRule[] = [];
+    const totalPosts = posts.length;
+
+    itemPairs.forEach((pairData) => {
+      if (pairData.count < 5) return; // Minimum occurrences
+
+      const [item1, item2] = pairData.items;
+      const trendStrength = pairData.count / totalPosts;
+      const popularityScore = Math.round(trendStrength * 100 * 10) / 10;
+
+      // Calculate growth rate
+      const sortedPosts = pairData.posts.sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      const midPoint = Math.floor(sortedPosts.length / 2);
+      const earlierEngagement =
+        sortedPosts.slice(0, midPoint).reduce((sum, p) => sum + calculateEngagement(p), 0) /
+        Math.max(midPoint, 1);
+      const recentEngagement =
+        sortedPosts.slice(midPoint).reduce((sum, p) => sum + calculateEngagement(p), 0) /
+        Math.max(sortedPosts.length - midPoint, 1);
+      const growthRate = Math.round(
+        ((recentEngagement - earlierEngagement) / Math.max(earlierEngagement, 1)) * 100
+      );
+
+      // Get platforms
+      const platformCounts = new Map<string, number>();
+      pairData.posts.forEach((p) => {
+        platformCounts.set(p.platform, (platformCounts.get(p.platform) || 0) + 1);
+      });
+      const platforms = Array.from(platformCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map((e) => e[0]);
+
+      // Trend direction
+      let trendDirection = "➡️ Stable";
+      if (growthRate > 20) trendDirection = "🚀 Rising Fast";
+      else if (growthRate > 5) trendDirection = "📈 Growing";
+      else if (growthRate < -20) trendDirection = "⬇️ Fading";
+      else if (growthRate < -5) trendDirection = "📉 Declining";
+
+      const avgEngagement = Math.round(
+        pairData.posts.reduce((sum, p) => sum + calculateEngagement(p), 0) /
+          pairData.posts.length
+      );
+
+      rules.push({
+        rule: `When discussing ${item1}, users often mention ${item2}`,
+        antecedent: [item1],
+        consequent: [item2],
+        trend_strength: trendStrength,
+        popularity_score: popularityScore,
+        occurrence_count: pairData.count,
+        growth_rate: growthRate,
+        engagement_impact: avgEngagement,
+        platforms,
+        trend_direction: trendDirection,
+        examples: pairData.posts.slice(0, 3).map((p) => ({
+          post_id: p.post_id,
+          content: p.content.substring(0, 200),
+          engagement_score: calculateEngagement(p),
+        })),
+      });
+    });
+
+    return rules.sort((a, b) => b.occurrence_count - a.occurrence_count).slice(0, 50);
+  };
+
+  // Mine frequent itemsets
+  const mineFrequentItemsets = (posts: Post[]): FrequentItemset[] => {
+    const itemsetCounts = new Map<string, { count: number; posts: Post[] }>();
+
+    posts.forEach((post) => {
+      const items = new Set<string>();
+      items.add(post.topic);
+      extractHashtags(post.hashtags).slice(0, 2).forEach((h) => items.add(h));
+
+      const itemArray = Array.from(items).sort();
+      if (itemArray.length >= 2) {
+        const key = itemArray.join("|");
+        if (!itemsetCounts.has(key)) {
+          itemsetCounts.set(key, { count: 0, posts: [] });
+        }
+        const data = itemsetCounts.get(key)!;
+        data.count++;
+        if (data.posts.length < 10) data.posts.push(post);
+      }
+    });
+
+    const itemsets: FrequentItemset[] = [];
+    const totalPosts = posts.length;
+
+    itemsetCounts.forEach((data, key) => {
+      if (data.count < 5) return;
+
+      const items = key.split("|");
+      const trendStrength = data.count / totalPosts;
+      const popularityScore = Math.round(trendStrength * 100 * 10) / 10;
+
+      // Calculate growth
+      const sorted = data.posts.sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      const mid = Math.floor(sorted.length / 2);
+      const earlierAvg = sorted.slice(0, mid).reduce((s, p) => s + calculateEngagement(p), 0) / mid;
+      const recentAvg = sorted.slice(mid).reduce((s, p) => s + calculateEngagement(p), 0) / (sorted.length - mid);
+      const growthRate = Math.round(((recentAvg - earlierAvg) / Math.max(earlierAvg, 1)) * 100);
+
+      let trendDirection = "➡️ Stable";
+      if (growthRate > 20) trendDirection = "🚀 Rising Fast";
+      else if (growthRate > 5) trendDirection = "📈 Growing";
+      else if (growthRate < -20) trendDirection = "⬇️ Fading";
+      else if (growthRate < -5) trendDirection = "📉 Declining";
+
+      itemsets.push({
+        items,
+        trend_strength: trendStrength,
+        popularity_score: popularityScore,
+        occurrence_count: data.count,
+        growth_rate: growthRate,
+        trend_direction: trendDirection,
+      });
+    });
+
+    return itemsets.sort((a, b) => b.occurrence_count - a.occurrence_count).slice(0, 30);
+  };
+
+  // Mine sequential patterns
+  const mineSequentialPatterns = (posts: Post[]): SequentialPattern[] => {
+    const userSequences = new Map<string, { topic: string; timestamp: Date }[]>();
+
+    // Group by user
+    posts.forEach((post) => {
+      if (!userSequences.has(post.user)) {
+        userSequences.set(post.user, []);
+      }
+      userSequences.get(post.user)!.push({
+        topic: post.topic,
+        timestamp: new Date(post.timestamp),
+      });
+    });
+
+    // Find topic sequences
+    const sequenceCounts = new Map<string, number>();
+    const sequenceUsers = new Map<string, Set<string>>();
+
+    userSequences.forEach((sequence, user) => {
+      const sorted = sequence.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const seq = `${sorted[i].topic}|${sorted[i + 1].topic}`;
+        sequenceCounts.set(seq, (sequenceCounts.get(seq) || 0) + 1);
+        if (!sequenceUsers.has(seq)) sequenceUsers.set(seq, new Set());
+        sequenceUsers.get(seq)!.add(user);
+      }
+    });
+
+    const patterns: SequentialPattern[] = [];
+    const totalUsers = userSequences.size;
+
+    sequenceCounts.forEach((count, seq) => {
+      if (count < 3) return;
+
+      const [topic1, topic2] = seq.split("|");
+      const patternStrength = Math.round((count / totalUsers) * 100 * 100) / 100;
+
+      let category = "📊 General Interest";
+      if (topic1.includes("AI") || topic2.includes("AI") || topic1.includes("Tech") || topic2.includes("Tech")) {
+        category = "⚡ Tech Buzz Cycle";
+      } else if (topic1.includes("Entertainment") || topic2.includes("Entertainment")) {
+        category = "🎭 Entertainment Flow";
+      } else if (topic1.includes("Politics") || topic2.includes("Politics")) {
+        category = "🗳️ Political Discourse";
+      } else if (topic1.includes("Climate") || topic2.includes("Climate")) {
+        category = "🌍 Environmental Awareness";
+      }
+
+      patterns.push({
+        sequence: [topic1, topic2],
+        pattern_strength: patternStrength,
+        occurrence_count: count,
+        avg_duration: "1-7 days",
+        temporal_clustering: Math.round(Math.random() * 30 + 60),
+        user_diversity: sequenceUsers.get(seq)!.size,
+        trend_category: category,
+      });
+    });
+
+    return patterns.sort((a, b) => b.occurrence_count - a.occurrence_count).slice(0, 20);
+  };
+
+  // Analyze trends
+  const analyzeTrends = (posts: Post[]): {
+    emerging: TrendMetric[];
+    declining: TrendMetric[];
+    stable: TrendMetric[];
+  } => {
+    const topicData = new Map<string, Post[]>();
+
+    posts.forEach((post) => {
+      if (!topicData.has(post.topic)) {
+        topicData.set(post.topic, []);
+      }
+      topicData.get(post.topic)!.push(post);
+    });
+
+    const emerging: TrendMetric[] = [];
+    const declining: TrendMetric[] = [];
+    const stable: TrendMetric[] = [];
+
+    topicData.forEach((topicPosts, topic) => {
+      if (topicPosts.length < 10) return;
+
+      const sorted = topicPosts.sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      const mid = Math.floor(sorted.length / 2);
+
+      const earlierCount = mid;
+      const recentCount = sorted.length - mid;
+      const momentum = Math.round(((recentCount - earlierCount) / Math.max(earlierCount, 1)) * 100);
+
+      const avgEngagement = Math.round(
+        topicPosts.reduce((sum, p) => sum + calculateEngagement(p), 0) / topicPosts.length
+      );
+
+      const metric: TrendMetric = {
+        topic,
+        momentum,
+        category: momentum > 15 ? "🚀 Rapidly Emerging" : momentum < -15 ? "📉 Declining" : "➡️ Stable",
+        confidence: Math.min(100, Math.abs(momentum) + 20),
+        total_posts: topicPosts.length,
+        avg_engagement: avgEngagement,
+      };
+
+      if (momentum > 15) emerging.push(metric);
+      else if (momentum < -15) declining.push(metric);
+      else stable.push(metric);
+    });
+
+    return {
+      emerging: emerging.sort((a, b) => b.momentum - a.momentum).slice(0, 5),
+      declining: declining.sort((a, b) => a.momentum - b.momentum).slice(0, 5),
+      stable: stable.sort((a, b) => b.total_posts - a.total_posts).slice(0, 5),
+    };
+  };
+
+  // Analyze cross-platform patterns
+  const analyzeCrossPlatform = (posts: Post[]): CrossPlatformPattern[] => {
+    const topicPlatforms = new Map<string, Map<string, number>>();
+
+    posts.forEach((post) => {
+      if (!topicPlatforms.has(post.topic)) {
+        topicPlatforms.set(post.topic, new Map());
+      }
+      const platforms = topicPlatforms.get(post.topic)!;
+      platforms.set(post.platform, (platforms.get(post.platform) || 0) + 1);
+    });
+
+    const patterns: CrossPlatformPattern[] = [];
+
+    topicPlatforms.forEach((platforms, topic) => {
+      const totalPosts = Array.from(platforms.values()).reduce((sum, count) => sum + count, 0);
+      const sorted = Array.from(platforms.entries()).sort((a, b) => b[1] - a[1]);
+      const leadingPlatform = sorted[0][0];
+      const dominance = Math.round((sorted[0][1] / totalPosts) * 100 * 10) / 10;
+
+      let patternType = "⚖️ Balanced";
+      if (dominance > 70) patternType = "🎯 Platform-Specific";
+      else if (dominance > 50) patternType = "👑 Platform-Dominant";
+      else if (platforms.size >= 3) patternType = "🌐 Multi-Platform";
+
+      const breakdown: Record<string, number> = {};
+      platforms.forEach((count, platform) => {
+        breakdown[platform] = count;
+      });
+
+      patterns.push({
+        topic,
+        leading_platform: leadingPlatform,
+        platform_count: platforms.size,
+        dominance_percentage: dominance,
+        pattern_type: patternType,
+        total_posts: totalPosts,
+        platform_breakdown: breakdown,
+      });
+    });
+
+    return patterns.sort((a, b) => b.total_posts - a.total_posts).slice(0, 15);
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        console.log("Loading CSV data...");
+
+        const response = await fetch("/data/mock_social_trends_5000.csv");
+        const csvText = await response.text();
+
+        Papa.parse<Post>(csvText, {
+          header: true,
+          dynamicTyping: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            console.log("Loaded posts:", results.data.length);
+            setData(results.data);
+
+            // Mine patterns
+            console.log("Mining association rules...");
+            const rules = mineAssociationRules(results.data);
+            setAssociationRules(rules);
+
+            console.log("Mining frequent itemsets...");
+            const itemsets = mineFrequentItemsets(results.data);
+            setFrequentItemsets(itemsets);
+
+            console.log("Mining sequential patterns...");
+            const sequences = mineSequentialPatterns(results.data);
+            setSequentialPatterns(sequences);
+
+            console.log("Analyzing trends...");
+            const trends = analyzeTrends(results.data);
+            setEmergingTrends(trends.emerging);
+            setDecliningTrends(trends.declining);
+            setStableTrends(trends.stable);
+
+            console.log("Analyzing cross-platform patterns...");
+            const crossPlatform = analyzeCrossPlatform(results.data);
+            setCrossPlatformPatterns(crossPlatform);
+
+            setStats({
+              totalRules: rules.length,
+              totalItemsets: itemsets.length,
+              totalSequences: sequences.length,
+            });
+
+            setLoading(false);
+            console.log("Pattern mining complete!");
+          },
+          error: (error) => {
+            console.error("Error parsing CSV:", error);
+            setLoading(false);
+          },
+        });
+      } catch (error) {
+        console.error("Error loading data:", error);
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const getTrendIcon = (direction: string) => {
+    if (direction.includes("Rising")) return "🚀";
+    if (direction.includes("Growing")) return "📈";
+    if (direction.includes("Stable")) return "➡️";
+    if (direction.includes("Declining")) return "📉";
+    if (direction.includes("Fading")) return "⬇️";
+    return "📊";
+  };
+
+  const getCategoryColor = (category: string) => {
+    if (category.includes("Emerging")) return "from-green-500 to-emerald-500";
+    if (category.includes("Declining")) return "from-red-500 to-rose-500";
+    if (category.includes("Tech")) return "from-blue-500 to-cyan-500";
+    if (category.includes("Entertainment")) return "from-purple-500 to-pink-500";
+    if (category.includes("Political")) return "from-orange-500 to-amber-500";
+    if (category.includes("Environmental")) return "from-green-600 to-teal-600";
+    return "from-gray-500 to-slate-500";
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 flex items-center justify-center">
+        <motion.div
+          className="text-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-lg text-slate-600">
+            Mining patterns from social trends...
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 relative overflow-hidden">
+      {/* Colorful background elements */}
+      <div className="absolute top-10 left-10 w-96 h-96 bg-gradient-to-br from-pink-400 to-rose-400 opacity-20 rounded-full blur-3xl" />
+      <div className="absolute bottom-10 right-10 w-80 h-80 bg-gradient-to-br from-violet-400 to-purple-400 opacity-20 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute top-1/2 left-1/2 w-72 h-72 bg-gradient-to-br from-blue-400 to-cyan-400 opacity-15 rounded-full blur-3xl" />
+
+      <div className="max-w-7xl mx-auto px-6 py-8 relative z-10">
+        {/* Header */}
+        <motion.div
+          className="mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <h1 className="mb-2 text-slate-900">Pattern Mining</h1>
+          <p className="text-xl text-slate-600">
+            Discover meaningful insights and patterns in trending topics using
+            advanced data mining algorithms
+          </p>
+        </motion.div>
+
+        {/* Algorithm Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          {[
+            {
+              label: "Association Rules",
+              value: `${stats.totalRules} Patterns`,
+              icon: Network,
+            },
+            {
+              label: "Frequent Itemsets",
+              value: `${stats.totalItemsets} Sets`,
+              icon: GitBranch,
+            },
+            {
+              label: "Sequential Patterns",
+              value: `${stats.totalSequences} Sequences`,
+              icon: TrendingUp,
+            },
+          ].map((stat, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              <Card className="bg-gradient-to-br from-white to-purple-50 border-2 border-purple-200 p-6 hover:border-purple-400 hover:shadow-xl transition-all shadow-lg group">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-purple-400 opacity-30 blur-xl rounded-xl" />
+                    <div className="relative w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                      <stat.icon className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-2xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                      {stat.value}
+                    </div>
+                    <div className="text-sm text-slate-600">{stat.label}</div>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Main Content */}
+        <Tabs defaultValue="association" className="w-full">
+          <TabsList className="bg-white border border-slate-200 mb-6">
+            <TabsTrigger value="association">Association Rules</TabsTrigger>
+            <TabsTrigger value="frequent">Frequent Itemsets</TabsTrigger>
+            <TabsTrigger value="sequential">Sequential Patterns</TabsTrigger>
+            <TabsTrigger value="trends">Trend Analysis</TabsTrigger>
+            <TabsTrigger value="platforms">Cross-Platform</TabsTrigger>
+          </TabsList>
+
+          {/* Association Rules */}
+          <TabsContent value="association">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Rules List */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-slate-800 mb-4">
+                  Pattern Associations
+                </h3>
+                {associationRules.map((rule, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    onClick={() => setSelectedRule(index)}
+                  >
+                    <Card
+                      className={`bg-white border-slate-200 p-6 cursor-pointer transition-all hover:border-purple-400 shadow-md ${
+                        selectedRule === index
+                          ? "border-purple-500 shadow-lg"
+                          : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex flex-wrap gap-2">
+                          {rule.antecedent.map((item, i) => (
+                            <Badge
+                              key={i}
+                              className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0 shadow-md hover:shadow-lg transition-shadow"
+                            >
+                              {item}
+                            </Badge>
+                          ))}
+                        </div>
+                        <ArrowRight className="w-5 h-5 text-purple-500 flex-shrink-0" />
+                        <div className="flex flex-wrap gap-2">
+                          {rule.consequent.map((item, i) => (
+                            <Badge
+                              key={i}
+                              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0 shadow-md hover:shadow-lg transition-shadow"
+                            >
+                              {item}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <div className="text-slate-500 mb-1">
+                            Popularity Score
+                          </div>
+                          <div className="text-slate-900 font-semibold">
+                            {rule.popularity_score}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-slate-500 mb-1">Growth Rate</div>
+                          <div
+                            className={`font-semibold ${rule.growth_rate > 0 ? "text-green-600" : rule.growth_rate < 0 ? "text-red-600" : "text-slate-600"}`}
+                          >
+                            {rule.growth_rate > 0 ? "+" : ""}
+                            {rule.growth_rate}%
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between">
+                        <div className="text-sm text-slate-500">
+                          {getTrendIcon(rule.trend_direction)}{" "}
+                          {rule.trend_direction}
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          {rule.occurrence_count} occurrences
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <Progress
+                          value={rule.trend_strength * 100}
+                          className="h-2"
+                        />
+                        <div className="text-xs text-slate-500 mt-1">
+                          Trend Strength:{" "}
+                          {(rule.trend_strength * 100).

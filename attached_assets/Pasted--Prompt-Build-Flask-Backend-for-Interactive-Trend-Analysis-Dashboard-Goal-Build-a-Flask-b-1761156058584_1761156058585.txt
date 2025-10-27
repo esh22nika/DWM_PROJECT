@@ -1,0 +1,239 @@
+##Prompt — Build Flask Backend for Interactive Trend Analysis Dashboard
+
+**Goal:**
+Build a **Flask backend** that loads and processes the provided dataset (`mock_social_trends_5000.csv`) and serves endpoints for all dashboard pages:
+
+* **Dashboard**
+* **Trend Analysis**
+* **Pattern Mining**
+* **Topic Explorer**
+
+The backend should reproduce all analytics logic described below, provide realistic responses for the frontend, and be structured for later DB migration (e.g., SQLite → Postgres).
+
+---
+
+### 📦 Stack
+
+* Python 3.11+
+* Flask
+* Pandas
+* SQLite (or in-memory DataFrame for now)
+* Flask-CORS
+* Basic NLP utilities (e.g., `nltk`, `re`, `collections`)
+* Optional: `textblob` or `vaderSentiment` for simple sentiment analysis fallback
+
+Include:
+
+```bash
+pip install flask flask-cors pandas nltk textblob
+```
+
+Provide these entry points:
+
+* `app.py` (main Flask app)
+* `utils/data_loader.py`
+* `utils/analytics.py`
+* `routes/dashboard.py`
+* `routes/trends.py`
+* `routes/patterns.py`
+* `routes/topics.py`
+* `run.py` (entry to start the server)
+
+---
+
+## 📂 Folder Structure
+
+```
+backend/
+│
+├── app.py
+├── run.py
+├── data/
+│   └── mock_social_trends_5000.csv
+│
+├── utils/
+│   ├── data_loader.py
+│   └── analytics.py
+│
+└── routes/
+    ├── dashboard.py
+    ├── trends.py
+    ├── patterns.py
+    └── topics.py
+```
+
+---
+
+## ⚙️ Core Dataset Columns
+
+Ensure `data_loader.py` loads the CSV with columns:
+
+```
+post_id, platform, user, content, hashtags, topic, likes, shares, comments, sentiment, timestamp, region
+```
+
+---
+
+## 🧮 Functional Logic (implement in analytics.py)
+
+### 1. Dashboard Analytics
+
+* **tracked_trends_count:** unique topics across all platforms
+* **active_topics_count:** topics with mentions in last 14 days
+* **updated_recently_count:** topics updated within last 7 days
+* **platform_breakdown:** count of posts per platform
+
+✅ Endpoint: `GET /api/dashboard/summary`
+
+```json
+{
+  "tracked_trends_count": 128,
+  "active_topics_count": 47,
+  "updated_recently_count": 16,
+  "platform_breakdown": {"Twitter": 2100, "YouTube": 1300, "Reddit": 900, "Google": 700},
+  "top_topics": [{"topic":"AI","mentions":343,"last_updated":"2025-10-22"}]
+}
+```
+
+---
+
+### 2. Personalized “For You” Feed
+
+✅ Endpoint: `GET /api/dashboard/for-you?interests=ai,ev,coding`
+
+Logic:
+
+* Parse comma-separated `interests`
+* Compute **relevance score** per interest based on:
+
+  * Match in topic/content/hashtags
+  * Engagement weight = `likes + 2*shares + 0.5*comments`
+  * Recency weight = `exp(-days_since_post / 7)`
+* Normalize to 0–100
+* Return posts grouped:
+
+  * `for_you`: Top matches by relevance
+  * `trending`: High engagement recent posts
+  * `following`: Topics the user specified
+
+Response:
+
+```json
+{
+  "relevance_score": 87.2,
+  "for_you": [...],
+  "trending": [...],
+  "following": [...]
+}
+```
+
+---
+
+### 3. Trend Analysis
+
+✅ Endpoint: `GET /api/trends/overview?days=90`
+
+Detect:
+
+* **Emerging:** growth rate > 1.8
+* **Peak:** stable with high mentions
+* **Declining:** growth rate < 0.6
+* **Active:** any topic in the last 14 days
+
+Compute from time-bucketed topic counts (`groupby(['topic','day'])`).
+
+Also return a **trend timeline** showing 3–4 top topic categories (AI, Sports, Entertainment, EVs):
+
+```json
+{
+  "emerging_topics": [{"topic":"AI","growth_rate":4.2}],
+  "declining_topics": [{"topic":"Olympics","decline_rate":0.4}],
+  "peak_topics": [{"topic":"Cricket"}],
+  "active_topics": [{"topic":"EV"}],
+  "trend_timeline": {
+    "categories":["AI","EV","Entertainment","Sports"],
+    "series":{
+      "AI":[{"date":"2025-09-01","count":20}, {"date":"2025-10-22","count":60}]
+    }
+  }
+}
+```
+
+✅ Endpoint: `GET /api/trends/platform-comparison?topic=AI`
+
+* Return daily time series per platform
+* Fields: `engagement_sum`, `avg_sentiment`
+
+---
+
+### 4. Pattern Mining
+
+✅ Endpoint: `GET /api/patterns/top`
+
+Goal: identify **topic-phrase rules** like:
+
+> “Taylor Swift” often co-occurs with “new album”
+
+Rules built using:
+
+* Phrase extraction (n-grams, named entities)
+* Topic co-occurrence in same post
+* Output example posts
+
+Return JSON:
+
+```json
+[
+  {
+    "rule":"Taylor Swift (Entertainment) appears with 'new album'",
+    "cooccurrence_count":132,
+    "examples":[{"post_id":201},{"post_id":532}]
+  }
+]
+```
+
+✅ Endpoint: `GET /api/patterns/graph`
+
+* Return topic network (nodes = topics, edges = co-occurrence count)
+
+---
+
+### 5. Topic Explorer
+
+✅ Endpoint: `GET /api/topics/list?query=ai`
+Return filtered topic info:
+
+```json
+{
+  "topics": [
+    {"topic":"AI","total_mentions":423,"sentiment":"positive","recent_posts":[...]},
+    ...
+  ]
+}
+```
+
+✅ Endpoint: `GET /api/topics/detail?topic=AI`
+
+* Return sentiment trend, engagement over time, related topics, sample posts.
+
+---
+
+### 🧩 Bonus Behavior
+
+* Cache computed analytics for speed (e.g., in `@lru_cache`).
+* Add automatic CSV reload every 24h if file changes.
+* CORS enabled for all routes.
+* JSON responses only.
+* Include a `/health` route returning `{status: "ok"}`.
+
+---
+
+### 📜 Example Startup & Usage
+
+**run.py**
+
+```python
+from app import app
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
