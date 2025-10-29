@@ -420,10 +420,11 @@ export function TrendAnalysis() {
     { topic: "Arijit Singh Album", avgSentiment: 0.48, avgEngagement: 19200, volume: 101, cluster: "Entertainment Buzz", clusterColor: "#EC4899" },
     { topic: "Bollywood & OTT", avgSentiment: 0.62, avgEngagement: 21200, volume: 256, cluster: "Entertainment Buzz", clusterColor: "#EC4899" },
     { topic: "Gaming Launch", avgSentiment: 0.74, avgEngagement: 31200, volume: 129, cluster: "Entertainment Buzz", clusterColor: "#EC4899" },
-    { topic: "GTA 6 Preview", avgSentiment: 0.83, avgEngagement: 32500, volume: 187, cluster: "Entertainment Buzz", clusterColor: "#EC4899" },
+    { topic: "Gaming", avgSentiment: 0.82, avgEngagement: 28900, volume: 119, cluster: "Space & ISRO", clusterColor: "#EC4899" },
 
     // 🚀 SPACE & ISRO (Purple)
-    { topic: "Chandrayaan-4", avgSentiment: 0.82, avgEngagement: 28900, volume: 119, cluster: "Space & ISRO", clusterColor: "#8B5CF6" },
+    { topic: "Chandrayaan-4", avgSentiment: 0.83, avgEngagement: 32500, volume: 187, cluster: "Space & ISRO", clusterColor: "#8B5CF6" },
+    
     { topic: "ISRO Mission Update", avgSentiment: 0.79, avgEngagement: 27200, volume: 139, cluster: "Space & ISRO", clusterColor: "#8B5CF6" },
     { topic: "ISRO Telescope", avgSentiment: 0.77, avgEngagement: 27600, volume: 128, cluster: "Space & ISRO", clusterColor: "#8B5CF6" },
     { topic: "SpaceX Collaboration", avgSentiment: 0.73, avgEngagement: 26600, volume: 148, cluster: "Space & ISRO", clusterColor: "#8B5CF6" },
